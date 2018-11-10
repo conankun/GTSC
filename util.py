@@ -29,6 +29,31 @@ def read_tensor(filepath):
 	f.close()
 	return P.T
 
+def norm_tensor(P):
+	m, n = P.shape
+	# since last column is value
+	m -= 1
+	print (n, m)
+	tab = {}
+	for k in range(n):
+		tempArray = []
+		for i in range(1, m):
+			tempArray.append(P[i,k])
+		tempKey = tuple(tempArray)
+		print(tempKey)
+		if tempKey in tab:
+			tab[tempKey] += P[m][k]
+		else:
+			tab[tempKey] = P[m][k]
+	for k in range(n):
+		tempArray = []
+		for i in range(1, m):
+			tempArray.append(P[i,k])
+		tempKey = tuple(tempArray)
+		P[m][k] = P[m][k] / tab[tempKey]
+	print (P)
+
 if __name__ == '__main__':
 	P = read_tensor('data/test.tns')
-	print (P)
+	norm_P = norm_tensor(P)
+	print (norm_P)
