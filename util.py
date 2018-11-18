@@ -51,7 +51,7 @@ def norm_tensor(P):
 			tempArray.append(P[i,k])
 		tempKey = tuple(tempArray)
 		P[m][k] = P[m][k] / tab[tempKey]
-	print (P)
+	return P
 
 if __name__ == '__main__':
 	P = read_tensor('data/test.tns')
