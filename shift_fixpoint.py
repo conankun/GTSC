@@ -3,7 +3,7 @@ def compute_kron(P, index, x):
 	m = P.shape[0] - 1
 	result = 1
 	for i in range(m - 1):
-		result = result * x[P[i + 1, index]]
+		result = result * x[int(P[i + 1, index]) - 1]
 	return result
 
 def sparse_kron(P, x):
@@ -11,7 +11,7 @@ def sparse_kron(P, x):
 	m = P.shape[0] -1
 	Px = np.zeros(n)
 	for ind in range(P.shape[1]):
-		Px[P[0, ind]] += P[m + 1, ind] * compute_kron(P, ind, x)
+		Px[int(P[0, ind])] += P[m, ind] * compute_kron(P, ind, x)
 	return Px
 
 def shift_fix(P, v, alpha, gamma, n):

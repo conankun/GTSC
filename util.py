@@ -9,7 +9,7 @@ import heapq
 import numpy as np
 import shift_fixpoint as sf
 import tensor_cut as tc
-from numpy import linalg as LA
+from scipy.sparse.linalg.eigen.arpack import eigsh as largest_eigsh
 GAMMA = 0.2
 
 def read_tensor(filepath):
@@ -61,7 +61,7 @@ class algPara:
 	# ALPHA - FLOAT64
 	# MIN, MAX_NUM - INT64
 	# PHI - FLOAT64
-	self algPara(ALPHA, MIN_NUM, MAX_NUM, PHI):
+	def __init__(self, ALPHA, MIN_NUM, MAX_NUM, PHI):
 		self.ALPHA = ALPHA
 		self.MIN_NUM = MIN_NUM
 		self.MAX_NUM = MAX_NUM
@@ -90,7 +90,7 @@ class cutTree:
 		self.data = data
 		self.left = left
 		self.right = right
-	def isless(anotherTree):
+	def __lt__(self, anotherTree):
 		return (self.n > anotherTree.n)
 
 def generate_treeNodes(parentNode, permEv, cutPoint, cutValue, para):
@@ -123,10 +123,12 @@ def generate_treeNodes(parentNode, permEv, cutPoint, cutValue, para):
 		parentNode.right = leftNode
 		return (rightNode, leftNode)
 
-def mymult(output, b, Adat, xT):
+def mymult(b, Adat, xT):
 	e = np.ones(b.shape[0])
-	output = Adat.dot(b) + ((xT.dot(b))[0, :]).dot(e-Adat.dot(e))
+	print ("first term", Adat.dot(b).shape)
+	output = Adat.dot(b) + (xT.dot(b)) * (e-Adat.dot(e))
 	return output
+
 def mymult2(output, b, Adat):
 	n = b.shape[0]
 	e = np.ones(n)
@@ -135,17 +137,18 @@ def mymult2(output, b, Adat):
 	return output
 
 def compute_egiv(P, al, ga):
-	n = P.max()
-
+	n = int(P.max())
 	v = np.ones(n)
 	print("Computing the super-spacey random surfer vector")
 	x = sf.shift_fix(P, v, al, ga, n)
 	xT = x.T
 	print("Generating Transition Matrix: P[x]")
 	RT = tc.tran_matrix(P, x)
-	# A = MyMatrixFcn{Float64}(n, n, (output, b) -> mymult(output, b, RT, xT))
+	#A = mymult(output, b, RT, xT)
+	# check accuracy of this.
+	A = np.ones((n,n))
 	print("Solving the eigenvector problem for P[x]")
-	eigenvalue, eigenvector = LA.eigsh(A, 2, which='LM')
+	eigenvalue, eigenvector = largest_eigsh(A, 2, which='LM')
 	return (eigenvector, RT, x)
 
 def cut_tensor(parentNode, treeNode):
@@ -164,8 +167,8 @@ def cut_tensor(parentNode, treeNode):
 	flag = np.ones(nz, dtype=bool)
 	for i in range(nz):
 		for j in range(m):
-			if not validInd[P[j][i]]:
-				flag[i] = false
+			if not validInd[int(P[j][i])-1]:
+				flag[i] = False
 	# need double check
 	newP = np.array([P[i][flag[i]] for i in range(m + 1)])
 	for i in range(len(newP[0])):
@@ -177,7 +180,7 @@ def refine(P, treeNode):
 	for i in range(P.shape[1]):
 		allIndex[P[0][i]] = 1
 	permIndex = allIndex.argsort()
-	if (allIndex[permIndex[0]] == 1) or (len(P.shape[1]) == 0):
+	if (allIndex[permIndex[0]] == 1) or (P.shape[1] == 0):
 		return P
 	print('Process Empty Indices in sub-tensor')
 	cutPoint = 0
@@ -193,9 +196,9 @@ def tensor_speclustering(P, algParameters):
 	rootNode = cutTree(0, 0, 0, 0, 0, 
 		np.array([], dtype='int64'), np.array([], dtype='int64'), 
 		np.array([], dtype='int64'), None, None)
-	rootNode.n = n
-	rootNode.subInd = [ii for ii in range(rootNode.n)]
-	rootNode.tenInd = [ii for ii in range(rootNode.n)]
+	rootNode.n = int(n)
+	rootNode.subInd = np.array([ii for ii in range(rootNode.n)])
+	rootNode.tenInd = np.array([ii for ii in range(rootNode.n)])
 	P = norm_tensor(P)
 	rootNode.data = P
 
@@ -205,7 +208,9 @@ def tensor_speclustering(P, algParameters):
 	temp2 = cutTree(0, 0, 0, 0, 0, 
 		np.array([], dtype='int64'), np.array([], dtype='int64'), 
 		np.array([], dtype='int64'), None, None)
-	h = heapq.heapify([temp1, temp2])
+	h = []
+	heapq.heappush(h, temp1)
+	heapq.heappush(h, temp2)
 	dummyP = P
 
 	for i in range(sys.maxsize):
@@ -217,14 +222,14 @@ def tensor_speclustering(P, algParameters):
 				heapq.heappush(h, hp)
 				return (rootNode, h)
 			dummyP = refine(hp.data, hp)
-			if (len(dummyP.shape[1]) == 0) or np.max(dummyP[0]) <= algParameters.MIN_NUM:
+			if (dummyP.shape[1]) == 0 or np.max(dummyP[0]) <= algParameters.MIN_NUM:
 				print("Tensor size smaller than MIN_NUM")
 				continue
 		print ('Tensor size ' + str(np.max(dummyP[0])) + ' with ' + str(len(dummyP[0])) + ' non-zeros.')
 		(ev, RT, x) = compute_egiv(dummyP, algParameters.ALPHA, GAMMA)
 		permEv = np.argsort(np.real(ev[:, 1]))
 		print ('Generating the sweep_cut')
-		(cutPoint, cutArray, cutValue, para) = sweep_cut(RT, x, permEv)
+		(cutPoint, cutArray, cutValue, para) = tc.sweep_cut(RT, x, permEv)
 		if (cutValue > algParameters.PHI) and np.max(dummyP[0]) < algParameters.MAX_NUM:
 			print('Did not cut the tensor as biased conductance (' + str(cutValue) + ') > PHI')
 			continue
